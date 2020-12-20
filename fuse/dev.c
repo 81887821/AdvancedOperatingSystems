@@ -7,6 +7,7 @@
 */
 
 #include "fuse_i.h"
+#include "fuse_log.h"
 
 #include <linux/init.h>
 #include <linux/module.h>
@@ -2273,6 +2274,19 @@ static struct miscdevice fuse_miscdevice = {
 	.fops = &fuse_dev_operations,
 };
 
+const struct file_operations fuse_logdev_operations = {
+	.owner = THIS_MODULE,
+	.open = fuse_dev_open,
+	.release = fuse_dev_release,
+	.read = fuse_logdev_read,
+};
+
+static struct miscdevice fuse_logdevice = {
+	.minor = FUSE_MINOR + 1,
+	.name = "fuse_log",
+	.fops = &fuse_logdev_operations,
+};
+
 int __init fuse_dev_init(void)
 {
 	int err = -ENOMEM;
@@ -2285,9 +2299,15 @@ int __init fuse_dev_init(void)
 	err = misc_register(&fuse_miscdevice);
 	if (err)
 		goto out_cache_clean;
+	err = misc_register(&fuse_logdevice);
+
+	if (err)
+		goto out_deregister;
 
 	return 0;
 
+ out_deregister:
+	misc_deregister(&fuse_miscdevice);
  out_cache_clean:
 	kmem_cache_destroy(fuse_req_cachep);
  out:
@@ -2296,6 +2316,7 @@ int __init fuse_dev_init(void)
 
 void fuse_dev_cleanup(void)
 {
+	misc_deregister(&fuse_logdevice);
 	misc_deregister(&fuse_miscdevice);
 	kmem_cache_destroy(fuse_req_cachep);
 }

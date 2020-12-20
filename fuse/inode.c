@@ -7,6 +7,7 @@
 */
 
 #include "fuse_i.h"
+#include "fuse_log.h"
 
 #include <linux/pagemap.h>
 #include <linux/slab.h>
@@ -63,6 +64,9 @@ MODULE_PARM_DESC(max_user_congthresh,
 #ifdef CONFIG_BLOCK
 static struct file_system_type fuseblk_fs_type;
 #endif
+
+struct fuse_log_entry *fuse_logs = NULL;
+atomic64_t fuse_num_logs = ATOMIC64_INIT(0);
 
 struct fuse_forget_link *fuse_alloc_forget(void)
 {
@@ -1505,6 +1509,13 @@ static int __init fuse_init(void)
 	sanitize_global_limit(&max_user_bgreq);
 	sanitize_global_limit(&max_user_congthresh);
 
+	fuse_logs = vmalloc(sizeof(struct fuse_log_entry) * FUSE_MAX_LOG_ENTRY);
+	if (fuse_logs == NULL) {
+		printk("fuse: fuse_logs allocation failed.\n");
+		res = -1;
+		goto err_sysfs_cleanup;
+	}
+
 	return 0;
 
  err_sysfs_cleanup:
@@ -1519,6 +1530,9 @@ static int __init fuse_init(void)
 
 static void __exit fuse_exit(void)
 {
+	if (fuse_logs)
+		vfree(fuse_logs);
+
 	pr_debug("exit\n");
 
 	fuse_ctl_cleanup();

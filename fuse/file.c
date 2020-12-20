@@ -7,6 +7,8 @@
 */
 
 #include "fuse_i.h"
+#include "fuse_log.h"
+#include "generic.h"
 
 #include <linux/pagemap.h>
 #include <linux/slab.h>
@@ -706,6 +708,8 @@ static ssize_t fuse_async_req_send(struct fuse_conn *fc,
 	ssize_t err;
 	struct fuse_io_priv *io = ia->io;
 
+	fuse_append_log(ia->ff, fl_fuse_enqueue_begin);
+
 	spin_lock(&io->lock);
 	kref_get(&io->refcnt);
 	io->size += num_bytes;
@@ -718,6 +722,7 @@ static ssize_t fuse_async_req_send(struct fuse_conn *fc,
 	if (err)
 		fuse_aio_complete_req(fc, &ia->ap.args, err);
 
+	fuse_append_log(ia->ff, fl_fuse_enqueue_end);
 	return num_bytes;
 }
 
@@ -1283,7 +1288,7 @@ static ssize_t fuse_cache_write_iter(struct kiocb *iocb, struct iov_iter *from)
 		if (err)
 			return err;
 
-		return generic_file_write_iter(iocb, from);
+		return fuse_generic_file_write_iter(iocb, from);
 	}
 
 	inode_lock(inode);
@@ -1366,10 +1371,12 @@ static inline size_t fuse_get_frag_size(const struct iov_iter *ii,
 
 static int fuse_get_user_pages(struct fuse_args_pages *ap, struct iov_iter *ii,
 				   size_t *nbytesp, int write,
-				   unsigned int max_pages)
+				   unsigned int max_pages, void *identifier)
 {
 	size_t nbytes = 0;  /* # bytes already packed in req */
 	ssize_t ret = 0;
+
+	fuse_append_log(identifier, fl_fuse_get_user_pages_begin);
 
 	/* Special case for kernel I/O: can copy directly into the buffer */
 	if (iov_iter_is_kvec(ii)) {
@@ -1383,6 +1390,7 @@ static int fuse_get_user_pages(struct fuse_args_pages *ap, struct iov_iter *ii,
 
 		iov_iter_advance(ii, frag_size);
 		*nbytesp = frag_size;
+		fuse_append_log(identifier, fl_fuse_get_user_pages_end);
 		return 0;
 	}
 
@@ -1417,6 +1425,7 @@ static int fuse_get_user_pages(struct fuse_args_pages *ap, struct iov_iter *ii,
 
 	*nbytesp = nbytes;
 
+	fuse_append_log(identifier, fl_fuse_get_user_pages_end);
 	return ret < 0 ? ret : 0;
 }
 
@@ -1460,7 +1469,7 @@ ssize_t fuse_direct_io(struct fuse_io_priv *io, struct iov_iter *iter,
 		size_t nbytes = min(count, nmax);
 
 		err = fuse_get_user_pages(&ia->ap, iter, &nbytes, write,
-					  max_pages);
+					  max_pages, file);
 		if (err && !nbytes)
 			break;
 
@@ -1585,6 +1594,8 @@ static ssize_t fuse_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 
 	if (is_bad_inode(file_inode(file)))
 		return -EIO;
+
+	fuse_append_log(file, fl_vfs_write_enter);
 
 	if (!(ff->open_flags & FOPEN_DIRECT_IO))
 		return fuse_cache_write_iter(iocb, from);
@@ -3085,6 +3096,8 @@ fuse_direct_IO(struct kiocb *iocb, struct iov_iter *iter)
 	pos = offset;
 	inode = file->f_mapping->host;
 	i_size = i_size_read(inode);
+
+	fuse_append_log(file, fl_fuse_direct_io_enter);
 
 	if ((iov_iter_rw(iter) == READ) && (offset > i_size))
 		return 0;
