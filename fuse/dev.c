@@ -277,6 +277,8 @@ static void flush_bg_queue(struct fuse_conn *fc)
 void fuse_request_end(struct fuse_conn *fc, struct fuse_req *req)
 {
 	struct fuse_iqueue *fiq = &fc->iq;
+	
+	fuse_append_log(fc, fl_fuse_request_end);
 
 	if (test_and_set_bit(FR_FINISHED, &req->flags))
 		goto put_request;
@@ -1344,6 +1346,8 @@ static ssize_t fuse_dev_splice_read(struct file *in, loff_t *ppos,
 
 	if (!fud)
 		return -EPERM;
+
+	fuse_append_log(in, fl_fuse_dev_splice_read);
 
 	bufs = kvmalloc_array(pipe->buffers, sizeof(struct pipe_buffer),
 				  GFP_KERNEL);
