@@ -1020,7 +1020,7 @@ static ssize_t fuse_cache_read_iter(struct kiocb *iocb, struct iov_iter *to)
 			return err;
 	}
 
-	return generic_file_read_iter(iocb, to);
+	return fuse_generic_file_read_iter(iocb, to);
 }
 
 static void fuse_write_args_fill(struct fuse_io_args *ia, struct fuse_file *ff,
@@ -1580,6 +1580,8 @@ static ssize_t fuse_file_read_iter(struct kiocb *iocb, struct iov_iter *to)
 
 	if (is_bad_inode(file_inode(file)))
 		return -EIO;
+	
+	fuse_append_log(file, fl_vfs_read_enter);
 
 	if (!(ff->open_flags & FOPEN_DIRECT_IO))
 		return fuse_cache_read_iter(iocb, to);

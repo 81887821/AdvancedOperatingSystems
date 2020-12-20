@@ -7,6 +7,7 @@
  */
 
 #include "fuse_i.h"
+#include "fuse_log.h"
 
 #include <linux/xattr.h>
 #include <linux/posix_acl_xattr.h>
@@ -57,6 +58,8 @@ ssize_t fuse_getxattr(struct inode *inode, const char *name, void *value,
 
 	if (fc->no_getxattr)
 		return -EOPNOTSUPP;
+
+	fuse_append_log(inode, fl_fuse_getxattr_enter);
 
 	memset(&inarg, 0, sizeof(inarg));
 	inarg.size = size;
