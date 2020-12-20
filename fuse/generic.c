@@ -235,3 +235,72 @@ ssize_t fuse_generic_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 	return ret;
 }
 EXPORT_SYMBOL(fuse_generic_file_write_iter);
+
+/**
+ * generic_file_read_iter - generic filesystem read routine
+ * @iocb:	kernel I/O control block
+ * @iter:	destination for the data read
+ *
+ * This is the "read_iter()" routine for all filesystems
+ * that can use the page cache directly.
+ * Return:
+ * * number of bytes copied, even for partial reads
+ * * negative error code if nothing was read
+ */
+ssize_t fuse_generic_file_read_iter(struct kiocb *iocb, struct iov_iter *iter)
+{
+	size_t count = iov_iter_count(iter);
+	ssize_t retval = 0;
+
+	if (!count)
+		goto out; /* skip atime */
+
+	if (iocb->ki_flags & IOCB_DIRECT) {
+		struct file *file = iocb->ki_filp;
+		struct address_space *mapping = file->f_mapping;
+		struct inode *inode = mapping->host;
+		loff_t size;
+
+		size = i_size_read(inode);
+		if (iocb->ki_flags & IOCB_NOWAIT) {
+			if (filemap_range_has_page(mapping, iocb->ki_pos,
+						   iocb->ki_pos + count - 1))
+				return -EAGAIN;
+		} else {
+			retval = filemap_write_and_wait_range(mapping,
+						iocb->ki_pos,
+					        iocb->ki_pos + count - 1);
+			if (retval < 0)
+				goto out;
+		}
+
+		file_accessed(file);
+
+		retval = mapping->a_ops->direct_IO(iocb, iter);
+		if (retval >= 0) {
+			iocb->ki_pos += retval;
+			count -= retval;
+		}
+		iov_iter_revert(iter, count - iov_iter_count(iter));
+
+		/*
+		 * Btrfs can have a short DIO read if we encounter
+		 * compressed extents, so if there was an error, or if
+		 * we've already read everything we wanted to, or if
+		 * there was a short read because we hit EOF, go ahead
+		 * and return.  Otherwise fallthrough to buffered io for
+		 * the rest of the read.  Buffered reads will not work for
+		 * DAX files, so don't bother trying.
+		 */
+		if (retval < 0 || !count || iocb->ki_pos >= size ||
+		    IS_DAX(inode))
+			goto out;
+	}
+
+	retval = generic_file_buffered_read(iocb, iter, retval);
+out:
+	return retval;
+}
+EXPORT_SYMBOL(fuse_generic_file_read_iter);
+
+
