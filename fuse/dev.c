@@ -157,6 +157,9 @@ static struct fuse_req *fuse_get_req(struct fuse_conn *fc, bool for_background)
 static void fuse_put_request(struct fuse_conn *fc, struct fuse_req *req)
 {
 	if (refcount_dec_and_test(&req->count)) {
+
+		fuse_append_log(fc, fl_fuse_put_request);
+
 		if (test_bit(FR_BACKGROUND, &req->flags)) {
 			/*
 			 * We get here in the unlikely case that a background

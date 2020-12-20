@@ -10,6 +10,7 @@ typedef enum fuse_event {
 	fl_vfs_read_enter,
 	fl_fuse_getxattr_enter,
 	fl_fuse_dev_splice_read,
+	fl_fuse_put_request, 
 	fl_fuse_request_end,
 	fl_fuse_direct_io_enter,
 	fl_fuse_get_user_pages_begin, // page pinning 
